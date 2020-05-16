@@ -1,4 +1,4 @@
-﻿// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 // vi: set et ts=4 sw=2 sts=2:
 
 #ifdef HAVE_CONFIG_H
@@ -176,6 +176,8 @@ void assemble(GV &gv, FEM const &fem, Mat &A, Vec &b) {
   double b1 = 0.0;
   for(auto const & element : elements(gv))
     {
+        auto ref = Dune::referenceElement<double, dim>(element.type());
+
         for (auto const & is : intersections(gv, element))
         {
             // jesmo li na granici
@@ -183,26 +185,6 @@ void assemble(GV &gv, FEM const &fem, Mat &A, Vec &b) {
             {
                     if (is.geometry().center()[0] != -2 && is.geometry().center()[1] != 3 && is.geometry().center()[0] != 12 && is.geometry().center()[1] != - 2)
                     {
-                        std::vector<FEMGradient> gradphihat(fem.localBasis().size());
-
-                        fem.localBasis().evaluateJacobian(is.geometry().center(), gradphihat);
-
-                        b1 += gradphihat[0][0] * is.centerUnitOuterNormal();
-                    }
-
-            }
-        }
-  }
-  double b2 = 0.0;
-  for(auto const & element : elements(gv))
-    {
-        for (auto const & is : intersections(gv, element))
-        {
-            // jesmo li na granici
-            if ( is.boundary() )
-            {
-                    if (is.geometry().center()[0] != -2 && is.geometry().center()[1] != 3 && is.geometry().center()[0] != 12 && is.geometry().center()[1] != - 2){
-
                         const auto &rule = Dune::QuadratureRules<double, dim-1>::rule(is.geometry().type(), 2);
 
                         for (auto const &qpoint : rule)
@@ -210,13 +192,25 @@ void assemble(GV &gv, FEM const &fem, Mat &A, Vec &b) {
                             auto const weight = qpoint.weight();
                             auto const & point = qpoint.position();
                             auto dl = is.geometry().integrationElement(point);
-                            b2 += b1 * weight * dl;
-                        }
-                   }
-            }
-        }
-    }
 
+                            std::vector<FEMGradient> gradphihat(fem.localBasis().size());
+
+                            auto const loc_point = element.geometry().local(is.geometry().center());
+
+                            fem.localBasis().evaluateJacobian(loc_point, gradphihat);
+
+                            for (int i = 0; i < is.geometry().corners(); i++)
+                            {
+                                auto loc_index_i = ref.subEntity(is.indexInInside(), 1, i, dim);
+                                
+                                b1 += gradphihat[loc_index_i][0] * is.centerUnitOuterNormal() * weight * dl;
+                            }
+                        }
+                    }
+            }
+
+        }
+  }
   for(auto const & element : elements(gv))
     {
         for (auto const & is : intersections(gv, element))
@@ -265,13 +259,14 @@ void assemble(GV &gv, FEM const &fem, Mat &A, Vec &b) {
 
                         A[indexi] = 0.0; // stavi cijeli red na nulu
                         A[indexi][indexi] = 1.0;
-                        b[indexi] = Gamma / b2;
+                        b[indexi] = Gamma / b1;
+
                     }
                 }
             }
         }
     }
-  std::cout << b1 << ", " << b2 << std::endl;
+  std::cout << b1 << std::endl;
 }  
 
 int main(int argc, char** argv)
