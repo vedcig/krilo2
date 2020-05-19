@@ -195,16 +195,25 @@ void assemble(GV &gv, FEM const &fem, Mat &A, Vec &b) {
 
                             std::vector<FEMGradient> gradphihat(fem.localBasis().size());
 
-                            auto const loc_point = element.geometry().local(is.geometry().center());
+                            auto const loc_point = is.geometry().local(is.geometry().center());
 
-                            fem.localBasis().evaluateJacobian(loc_point, gradphihat);
+                            auto loc_point1 = is.geometryInInside().global(loc_point);
+
+                            auto jacInvTra = element.geometry().jacobianInverseTransposed(loc_point1);
+
+                            fem.localBasis().evaluateJacobian(loc_point1, gradphihat);
 
                             for (int i = 0; i < is.geometry().corners(); i++)
                             {
                                 auto loc_index_i = ref.subEntity(is.indexInInside(), 1, i, dim);
-                                
-                                b1 += gradphihat[loc_index_i][0] * is.centerUnitOuterNormal() * weight * dl;
+
+                                Dune::FieldVector<double, dim> grad1;
+                                jacInvTra.mv(gradphihat[loc_index_i][0], grad1);
+
+                                b1 += grad1 * is.centerUnitOuterNormal() * weight * dl;
+
                             }
+
                         }
                     }
             }
